@@ -5,7 +5,7 @@
 
 {
     'name': 'Factur-X Invoices for France',
-    'version': '10.0.1.0.0',
+    'version': '11.0.0.0.0',
     'category': 'Localisation',
     'license': 'AGPL-3',
     'summary': "France-specific module to generate Factur-X invoices",
@@ -13,7 +13,7 @@
     'maintainers': ['alexis-via'],
     'website': 'https://github.com/OCA/l10n-france',
     'depends': [
-        'account_invoice_factur-x',
+        'account_invoice_facturx',
         'l10n_fr_siret',
         ],
     'auto_install': True,
