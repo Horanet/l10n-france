@@ -6,7 +6,7 @@ from odoo import api, models
 
 
 class AccountInvoice(models.Model):
-    _inherit = 'account.invoice'
+    _inherit = 'account.move'
 
     @api.model
     def _cii_get_party_identification(self, commercial_partner):

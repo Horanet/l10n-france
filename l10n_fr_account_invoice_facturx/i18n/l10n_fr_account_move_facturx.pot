@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. module: l10n_fr_account_invoice_facturx
-#: model:ir.model,name:l10n_fr_account_invoice_facturx.model_account_invoice
+#: model:ir.model,name:l10n_fr_account_invoice_facturx.model_account_move
 msgid "Invoice"
 msgstr ""
 
