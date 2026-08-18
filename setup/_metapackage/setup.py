@@ -13,6 +13,7 @@ setuptools.setup(
         'odoo11-addon-l10n_fr_intrastat_product',
         'odoo11-addon-l10n_fr_siret',
         'odoo11-addon-l10n_fr_state',
+        'odoo11-addon-l10n_fr_account_tax_unece'
     ],
     classifiers=[
         'Programming Language :: Python',

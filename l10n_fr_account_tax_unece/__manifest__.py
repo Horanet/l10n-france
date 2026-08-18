@@ -5,7 +5,7 @@
 {
     'name': u'L10n FR Account Tax UNECE',
     'summary': "Auto-configure UNECE params on French taxes",
-    'version': '10.0.1.0.0',
+    'version': '11.0.0.0.0',
     'category': 'French Localization',
     'author': "Akretion,Odoo Community Association (OCA)",
     'website': 'http://www.akretion.com',
