@@ -2,14 +2,17 @@
 # @author: Alexis de Lattre <alexis.delattre@akretion.com>
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 
-from odoo import api, fields, models, tools, _
-from odoo.exceptions import UserError
-from dateutil.relativedelta import relativedelta
-from datetime import datetime, timedelta
-import requests
-import json
 import base64
+import json
 import logging
+from datetime import datetime, timedelta
+
+import requests
+from dateutil.relativedelta import relativedelta
+
+from odoo import _, api, fields, models, tools
+from odoo.exceptions import UserError
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -206,7 +209,7 @@ class ResCompany(models.Model):
     @api.model
     def chorus_post(self, api_params, url_path, payload, session=None):
         url_base = api_params['qualif'] and QUALIF_API_URL or API_URL
-        url = '%s/cpro/%s' % (url_base, url_path)
+        url = '{}/cpro/{}'.format(url_base, url_path)
         auth = (api_params['login'], api_params['password'])
         auth_piste = '%s:%s' % auth
         auth_piste_b64 = base64.b64encode(auth_piste.encode('utf8'))

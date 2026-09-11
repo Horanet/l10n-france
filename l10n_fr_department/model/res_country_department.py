@@ -37,6 +37,6 @@ class ResCountryDepartment(models.Model):
         for rec in self:
             dname = rec.name
             if rec.code:
-                dname = '%s (%s)' % (dname, rec.code)
+                dname = '{} ({})'.format(dname, rec.code)
             res.append((rec.id, dname))
         return res

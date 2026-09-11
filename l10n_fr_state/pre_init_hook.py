@@ -2,7 +2,7 @@
 # @author: Alexis de Lattre <alexis.delattre@akretion.com>
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
-from odoo import api, SUPERUSER_ID
+from odoo import SUPERUSER_ID, api
 
 fr_states = {
     44: 'res_country_state_alsace',

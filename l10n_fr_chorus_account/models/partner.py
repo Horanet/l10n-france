@@ -3,9 +3,11 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
 
-from odoo import api, fields, models, _
-from odoo.exceptions import UserError, ValidationError
 import logging
+
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError, ValidationError
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,6 +36,8 @@ class ResPartner(models.Model):
         'chorus.partner.service', 'partner_id', string='Chorus Services')
 
     def _compute_fr_chorus_service_count(self):
+        for partner in self:
+            partner.fr_chorus_service_count = 0
         res = self.env['chorus.partner.service'].read_group(
             [('partner_id', 'in', self.ids)], ['partner_id'], ['partner_id'])
         for re in res:
