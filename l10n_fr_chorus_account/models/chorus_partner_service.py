@@ -3,9 +3,11 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
 
-from odoo import api, fields, models, _
-from odoo.exceptions import UserError, ValidationError
 import logging
+
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError, ValidationError
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,13 +22,14 @@ class ChorusPartnerService(models.Model):
     code = fields.Char(string='Service Code', required=True)
     active = fields.Boolean(default=True)
     name = fields.Char(string='Service Name')
-    chorus_identifier = fields.Integer(string='Chorus Identifier', readonly=True)
+    chorus_identifier = fields.Integer(readonly=True)
     engagement_required = fields.Boolean(string='Engagement Required')
 
     @api.constrains('code')
     def service_factures_publiques_dont_use(self):
         # As explained on
-        # https://communaute.chorus-pro.gouv.fr/documentation/guide-dutilisation-de-lannuaire-des-structures-publiques-dans-chorus-pro/
+        # https://communaute.chorus-pro.gouv.fr/documentation/
+        # guide-dutilisation-de-lannuaire-des-structures-publiques-dans-chorus-pro/
         # "Le Service des factures publiques est exclusivement dédié à la
         # facturation intra-sphère publique.
         # If we use this service, the flux will be rejected
@@ -42,7 +45,7 @@ class ChorusPartnerService(models.Model):
     def name_get(self):
         res = []
         for partner in self:
-            name = '[%s] %s' % (partner.code, partner.name or '-')
+            name = '[{}] {}'.format(partner.code, partner.name or '-')
             res.append((partner.id, name))
         return res
 
@@ -118,7 +121,7 @@ class ChorusPartnerService(models.Model):
                         'identifier on partner',
                         service.display_name, partner.display_name)
                     continue
-            company = partner.company_id or self.env.user.company_id
+            company = partner.company_id or self.env.company
             if company not in company2api:
                 api_params = company.chorus_get_api_params(
                     raise_if_ko=raise_if_ko)
@@ -129,7 +132,7 @@ class ChorusPartnerService(models.Model):
         session = None
         for service in services:
             partner = service.partner_id
-            company = partner.company_id or self.env.user.company_id
+            company = partner.company_id or self.env.company
             api_params = company2api[company]
             (res, session) = service.api_consulter_service(
                 api_params, session)

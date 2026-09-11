@@ -2,9 +2,11 @@
 # @author: Alexis de Lattre <alexis.delattre@akretion.com>
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 
-from odoo import api, fields, models, _
-from odoo.exceptions import UserError
 import logging
+
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError
+
 logger = logging.getLogger(__name__)
 
 
@@ -13,27 +15,54 @@ class ChorusFlow(models.Model):
     _description = 'Chorus Flow'
     _order = 'id desc'
 
-    name = fields.Char(
-        'Flow Ref', readonly=True, copy=False, required=True)
-    date = fields.Date(
-        'Flow Date', readonly=True, copy=False, required=True)
+    name = fields.Char('Flow Ref', readonly=True, copy=False, required=True)
+    date = fields.Date('Flow Date', readonly=True, copy=False, required=True)
     attachment_id = fields.Many2one(
-        'ir.attachment', string='File Sent to Chorus',
-        readonly=True, copy=False)
-    status = fields.Char(
-        string='Flow Status', readonly=True, copy=False)
+        'ir.attachment', string="File Sent to Chorus", readonly=True, copy=False
+    )
+    status = fields.Char(string="Flow Status (raw value)", readonly=True, copy=False)
+    status_display = fields.Char(
+        compute='_compute_status_display', string="Flow Status", store=True
+    )
     status_date = fields.Datetime(
-        string='Last Status Update', readonly=True, copy=False)
-    syntax = fields.Selection(
-        [], string='Flow Syntax', readonly=True, copy=False, required=True)
-    notes = fields.Text(string='Notes', readonly=True, copy=False)
+        string="Last Status Update", readonly=True, copy=False
+    )
+    syntax = fields.Selection([], string="Flow Syntax", readonly=True, copy=False)
+    notes = fields.Text(string="Notes", readonly=True, copy=False)
     company_id = fields.Many2one(
-        'res.company', string='Company', required=True, readonly=True,
-        default=lambda self: self.env['res.company']._company_default_get())
+        'res.company',
+        string='Company',
+        required=True,
+        readonly=True,
+        default=lambda self: self.env.company,
+    )
     invoice_identifiers = fields.Boolean(
-        compute='_compute_invoice_identifiers', readonly=True, store=True)
+        compute='_compute_invoice_identifiers', readonly=True, store=True
+    )
+    initial_invoice_ids = fields.Many2many(
+        'account.move',
+        'chorus_flow_initial_account_move_rel',
+        'chorus_flow_id',
+        'move_id',
+        string="Initial Invoices",
+        help="Invoices in the flow before potential rejections",
+    )
     invoice_ids = fields.One2many(
-        'account.invoice', 'chorus_flow_id', string='Invoices', readonly=True)
+        'account.move',
+        'chorus_flow_id',
+        string="Invoices",
+        readonly=True,
+        help="Invoices in the flow after potential rejections",
+    )
+
+    @api.depends('status')
+    def _compute_status_display(self):
+        for flow in self:
+            if flow.status and flow.status.startswith("IN_") and len(flow.status) > 3:
+                status_display = flow.status[3:].replace("_", " ")
+            else:
+                status_display = flow.status
+            flow.status_display = status_display
 
     @api.depends('invoice_ids.chorus_identifier')
     def _compute_invoice_identifiers(self):
@@ -41,12 +70,14 @@ class ChorusFlow(models.Model):
             flow.invoice_identifiers = all(
                 [inv.chorus_identifier for inv in flow.invoice_ids])
 
+    @api.depends("name", "status_display")
     def name_get(self):
         res = []
         for flow in self:
             name = flow.name
-            if flow.status:
-                name = '%s (%s)' % (name, flow.status)
+            if flow.status_display:
+                status = flow.status_display
+                name = '{} ({})'.format(name, status)
             res.append((flow.id, name))
         return res
 
@@ -61,28 +92,53 @@ class ChorusFlow(models.Model):
             }
         # The webservice 'consulterCR' is broken for Factur-X (1/5/2018)
         # So I switch to 'consulterCRDetaille' which works fine for all formats
-        answer, session = self.env['res.company'].chorus_post(
-            api_params, 'transverses/v1/consulterCRDetaille', payload,
-            session=session)
+        answer, session = self.env["res.company"].chorus_post(
+            api_params, "transverses/v1/consulterCRDetaille", payload, session=session
+        )
         res = {}
         if answer:
-            notes = ''
-            if (
-                    answer.get('listeErreurDP') and
-                    isinstance(answer['listeErreurDP'], list)):
+            notes = ""
+            if answer.get("listeErreurDP") and isinstance(
+                answer["listeErreurDP"], list
+            ):
                 i = 0
                 for error in answer['listeErreurDP']:
                     i += 1
-                    notes += "Erreur %d :\n"\
-                        "  Identifiant fournisseur : %s\n"\
-                        "  Identifiant destinataire : %s\n"\
-                        "  Ref facture : %s\n"\
-                        "  Libellé erreur : %s\n" % (
+                    notes += (
+                        "Erreur %d :\n"
+                        "  Identifiant fournisseur : %s\n"
+                        "  Identifiant destinataire : %s\n"
+                        "  Ref facture : %s\n"
+                        "  Libellé erreur : %s\n"
+                        % (
                             i,
-                            error.get('identifiantFournisseur'),
-                            error.get('identifiantDestinataire'),
-                            error.get('numeroDP'),
-                            error.get('libelleErreurDP'))
+                            error.get("identifiantFournisseur"),
+                            error.get("identifiantDestinataire"),
+                            error.get("numeroDP"),
+                            error.get("libelleErreurDP"),
+                        )
+                    )
+                    # If we can identify the invoice in Odoo, we detach it
+                    # from the flow, so that it can be fixed and re-transmitted
+                    if error.get("numeroDP"):
+                        invoice = self.env["account.move"].search(
+                            [
+                                ("company_id", "=", self.company_id.id),
+                                ("name", "=", error["numeroDP"]),
+                            ],
+                            limit=1,
+                        )
+                        if invoice:
+                            invoice.message_post(
+                                body=_(
+                                    "This invoice has been <b>rejected by Chorus Pro</b> "
+                                    "for the following reason:<br/><i>%s</i><br/>"
+                                    "You should fix the error and send this invoice to "
+                                    "Chorus Pro again."
+                                )
+                                % error.get("libelleErreurDP")
+                            )
+                            invoice.sudo().write({"chorus_flow_id": False})
             res = {
                 'status': answer.get('etatCourantDepotFlux'),
                 'notes': notes or answer.get('libelle'),
@@ -90,8 +146,8 @@ class ChorusFlow(models.Model):
         return (res, session)
 
     def update_flow_status(self):
-        '''Called by a button on the flow or by cron'''
-        logger.info('Start to update chorus flow status')
+        """Called by a button on the flow or by cron"""
+        logger.info("Start to update chorus flow status")
         company2api = {}
         raise_if_ko = self._context.get('chorus_raise_if_ko', True)
         flows = []
@@ -119,9 +175,13 @@ class ChorusFlow(models.Model):
         url_path = 'factures/v1/rechercher/fournisseur'
         payload = {
             "numeroFluxDepot": self.name,
-            }
-        answer, session = self.env['res.company'].chorus_post(
-            api_params, url_path, payload)
+            "rechercheFactureParFournisseur": {
+                "nbResultatsParPage": len(self.initial_invoice_ids) + 2,
+            },
+        }
+        answer, session = self.env["res.company"].chorus_post(
+            api_params, url_path, payload
+        )
         invnum2chorus = {}
         # key = odoo invoice number, value = {} to write on odoo invoice
         if (
@@ -148,15 +208,21 @@ class ChorusFlow(models.Model):
         raise_if_ko = self._context.get('chorus_raise_if_ko', True)
         flows = []
         for flow in self:
-            if flow.status != 'IN_INTEGRE':
+            if flow.status not in ("IN_INTEGRE", "IN_INTEGRE_PARTIEL"):
                 if raise_if_ko:
-                    raise UserError(_(
-                        "On flow %s, the status is not 'IN_INTEGRE'")
-                        % (flow.name, flow.status))
+                    raise UserError(
+                        _(
+                            "On flow %s, the status is not 'INTEGRE' "
+                            "nor 'INTEGRE PARTIEL'."
+                        )
+                        % (flow.name, flow.status)
+                    )
                 logger.warning(
                     "Skipping flow %s: chorus flow status should be "
-                    "IN_INTEGRE but current value is %s", flow.name,
-                    flow.status)
+                    "IN_INTEGRE or IN_INTEGRE_PARTIEL but current value is %s",
+                    flow.name,
+                    flow.status,
+                )
                 continue
             if flow.invoice_identifiers:
                 if raise_if_ko:
@@ -182,26 +248,33 @@ class ChorusFlow(models.Model):
                 api_params, session=session)
             if invnum2chorus:
                 for inv in flow.invoice_ids:
-                    if inv.number in invnum2chorus:
-                        inv.write(invnum2chorus[inv.number])
+                    if inv.name in invnum2chorus:
+                        inv.write(invnum2chorus[inv.name])
         logger.info('End of the retrieval of chorus invoice identifiers')
 
     @api.model
     def chorus_cron(self):
         self = self.with_context(chorus_raise_if_ko=False)
         logger.info('Start Chorus flow cron')
-        to_update_flows = self.search([
-            ('status', 'not in', ('IN_REJETE', 'IN_INTEGRE'))])
+        to_update_flows = self.search(
+            [('status', 'not in', ('IN_REJETE', 'IN_INTEGRE', 'IN_INTEGRE_PARTIEL'))]
+        )
         to_update_flows.update_flow_status()
-        get_identifiers_flows = self.search([
-            ('status', '=', 'IN_INTEGRE'),
-            ('invoice_identifiers', '=', False)])
+        get_identifiers_flows = self.search(
+            [
+                ('status', 'in', ('IN_INTEGRE', 'IN_INTEGRE_PARTIEL')),
+                ('invoice_identifiers', '=', False),
+            ]
+        )
         get_identifiers_flows.get_invoice_identifiers()
-        invoices_update_invoice_status = self.env['account.invoice'].search([
-            ('state', 'in', ('open', 'paid')),
-            ('type', 'in', ('out_invoice', 'out_refund')),
-            ('transmit_method_code', '=', 'fr-chorus'),
-            ('chorus_identifier', '!=', False),
-            ('chorus_status', 'not in', ('MANDATEE', 'MISE_EN_PAIEMENT'))])
+        invoices_update_invoice_status = self.env['account.move'].search(
+            [
+                ('state', '=', 'posted'),
+                ('move_type', 'in', ('out_invoice', 'out_refund')),
+                ('transmit_method_code', '=', 'fr-chorus'),
+                ('chorus_identifier', '!=', False),
+                ('chorus_status', 'not in', ('MANDATEE', 'MISE_EN_PAIEMENT')),
+            ]
+        )
         invoices_update_invoice_status.chorus_update_invoice_status()
         logger.info('End Chorus flow cron')
