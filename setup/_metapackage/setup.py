@@ -17,6 +17,7 @@ setuptools.setup(
         'odoo13-addon-l10n_fr_intrastat_service',
         'odoo13-addon-l10n_fr_siret',
         'odoo13-addon-l10n_fr_state',
+        'odoo13-addon-l10n_fr_chorus_facturx'
     ],
     classifiers=[
         'Programming Language :: Python',
